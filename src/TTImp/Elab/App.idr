@@ -16,7 +16,7 @@ import TTImp.TTImp
 import Data.List
 
 %default covering
-
+    
 checkVisibleNS : {auto c : Ref Ctxt Defs} ->
                  FC -> Name -> Visibility -> Core ()
 checkVisibleNS fc (NS ns x) vis
@@ -315,18 +315,11 @@ mutual
               else pure ()
   checkPatTyValid fc defs env _ _ _ = pure ()
 
-  dotErased : {auto c : Ref Ctxt Defs} -> (argty : NF vars) ->
+  dotErased : {auto c : Ref Ctxt Defs} -> {vars : List Name} -> (argty : NF vars) ->
               Maybe Name -> Nat -> ElabMode -> RigCount -> RawImp -> Core RawImp
   dotErased argty mn argpos (InLHS lrig ) rig tm
       = if not (isErased lrig) && isErased rig
-          then do
-            -- if the argument type aty has a single constructor, there's no need 
-            -- to dot it
-            mconsCount <- countConstructors argty
-            if mconsCount == Just 1 || mconsCount == Just 0
-              then pure tm
-              else 
-                -- if argpos is an erased position of 'n', leave it, otherwise dot if
+          then  -- if argpos is an erased position of 'n', leave it, otherwise dot if
                 -- necessary
                 do defs <- get Ctxt
                    Just gdef <- maybe (pure Nothing) (\n => lookupCtxtExact n (gamma defs)) mn
@@ -335,20 +328,7 @@ mutual
                       then pure tm
                       else pure $ dotTerm tm
           else pure tm
-    where
-      ||| Count the constructors of a fully applied concrete datatype
-      countConstructors : NF vars -> Core (Maybe Nat)
-      countConstructors (NTCon _ tycName _ n args) = 
-        if length args == n
-        then do defs <- get Ctxt
-                Just gdef <- lookupCtxtExact tycName (gamma defs)
-                | Nothing => pure Nothing
-                let (TCon _ _ _ _ _ _ datacons _) = gdef.definition
-                | _ => pure Nothing
-                pure (Just (length datacons))
-        else pure Nothing
-      countConstructors _ = pure Nothing
-    
+    where    
       dotTerm : RawImp -> RawImp
       dotTerm tm
           = case tm of
@@ -709,3 +689,4 @@ checkApp rig elabinfo nest env fc fn expargs impargs exp
    = do (fntm, fnty_in) <- checkImp rig elabinfo nest env fn Nothing
         fnty <- getNF fnty_in
         checkAppWith rig elabinfo nest env fc fntm fnty (Nothing, 0) expargs impargs False exp
+

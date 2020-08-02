@@ -18,6 +18,31 @@ import Data.NameMap
 
 %default covering
 
+mutual 
+  (vars : List Name) => Show (Closure vars) where
+    show (MkClosure opts localEnv env tm) = "lambda env . (" ++ (show tm) ++ ")"
+    show (MkNFClosure x) = "closure: " ++ show x
+  
+  (vars : List Name) => Show (NHead vars) where
+    show (NLocal x idx p) = "NLocal _ (" ++ show idx ++ ") _"
+    show (NRef x n) = "NRef _ (" ++ show n ++ ")"
+    show (NMeta n k closures) = "NMeta (" ++ (concatMap show closures) ++ ")"
+  
+  (vars : List Name) => Show (NF vars) where
+      show (NBind fc x y f) = concat (the (List String) ["NBind _ (", show x,") _ _" ])
+      show (NApp fc x closures) = concat (the (List String) ["NApp _ (", show x, ") ", concatMap show closures])
+      show (NDCon fc x tag arity xs) = "NDCon"
+      show (NTCon fc x tag arity xs) = "NTCon"
+      show (NAs fc x y z) = "NAs"
+      show (NDelayed fc x y) = "NDelayed"
+      show (NDelay fc x y z) = "NDelay"
+      show (NForce fc x y xs) = "NForce"
+      show (NPrimVal fc x) = "NPrimVal"
+      show (NErased fc imp) = "NErased"
+      show (NType fc) = "NType"
+
+
+
 public export
 data UnifyMode = InLHS
                | InTerm
@@ -1586,6 +1611,20 @@ checkDots
          ust <- get UST
          put UST (record { dotConstraints = [] } ust)
   where
+    ||| Count the constructors of a fully applied concrete datatype
+    countConstructors : NF vars -> Core (Maybe Nat)
+    countConstructors (NTCon _ tycName _ n args) = 
+      if length args == n
+      then do defs <- get Ctxt
+              Just gdef <- lookupCtxtExact tycName (gamma defs)
+              | Nothing => pure Nothing
+              let (TCon _ _ _ _ _ _ datacons _) = gdef.definition
+              | _ => pure Nothing
+              pure (Just (length datacons))
+      else pure Nothing
+    countConstructors _ = pure Nothing
+
+  
     checkConstraint : (Name, DotReason, Constraint) -> Core ()
     checkConstraint (n, reason, MkConstraint fc wl blocked env x y)
         = do logTermNF 10 "Dot" env y
@@ -1624,7 +1663,24 @@ checkDots
                    argsSame <- checkArgsSame (namesSolved cs)
                    when (not (isNil (constraints cs))
                             || (hBefore && not h) || argsSame) $
-                      throw (InternalError "Dot pattern match fail"))
+                      do -- Just before we fail, in the (rare?) case
+                         -- where the set of syntactically possible
+                         -- constructors is subsingleton, we can defer
+                         -- dot-checking to the arguments
+                         patternTypeGlued <- getType env x
+                         mconsCount <- countConstructors !(patternTypeGlued.getNF)
+                         (if (mconsCount == Just 1 || mconsCount == Just 0)
+                          then do                               
+                               log 1 $ concat $ the (List String) ["I am about to fail: \n", show x,"\n "
+                                                            , show y
+                                                            , "\nnot $ isNil $ constraints cs = "
+                                                            , show $ not (isNil $ constraints cs)
+                                                            , "\nndef = ", show ndef
+                                                            , "\nargsSame = ", show argsSame ]
+
+                               pure () -- This is incorrect, because we need to check
+                                       -- the arguments as dotted
+                          else throw (InternalError "Dot pattern match fail")))
                (\err =>
                     case err of
                          InternalError _ =>
