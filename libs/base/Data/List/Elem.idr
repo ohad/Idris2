@@ -77,6 +77,19 @@ indexElem  _    []        = Nothing
 indexElem  Z    (y :: _)  = Just (y ** Here)
 indexElem (S n) (_ :: ys) = map (\(x ** p) => (x ** There p)) (indexElem n ys)
 
+||| Extract an element from a list if we know it's in that list
+||| The twist is that we may not actually have the element at runtim
+public export
+recallElem : (xs : List a) -> Elem x xs -> a
+recallElem (x :: _ )  Here = x
+recallElem (_ :: xs) (There pos) = recallElem xs pos
+
+||| A proof that `recallElem` recovers the perhaps runtime irrelevant implicit argument
+export
+recallCorrect : (xs : List a) -> (pos : Elem x xs) -> recallElem xs pos = x
+recallCorrect (x :: _ )  Here = Refl
+recallCorrect (_ :: xs) (There pos) = recallCorrect xs pos
+
 ||| Lift the membership proof to a mapped list
 export
 elemMap : (0 f : a -> b) -> Elem x xs -> Elem (f x) (map f xs)

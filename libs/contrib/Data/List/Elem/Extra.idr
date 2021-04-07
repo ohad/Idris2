@@ -2,45 +2,49 @@ module Data.List.Elem.Extra
 
 import Data.List
 import Data.List.Elem
+import Data.DPair
+import Data.Void
 
-%default total
+-- Auxiliary definitions for defining `unCons` below --
 
-||| Proof that an element is still inside a list if we append to it.
-public export
-elemAppLeft : (xs, ys : List a) -> (prf : Elem x xs) -> Elem x (xs ++ ys)
-elemAppLeft (x :: xs) ys Here = Here
-elemAppLeft (x :: xs) ys (There prf2) = There $ elemAppLeft xs ys prf2
+||| 'Postiive' evidence that a list is non-empty
+data IsCons : List a -> Type where
+  (::) : (x : a) -> (xs : List a) -> IsCons (x :: xs)
 
+||| Turns the negative information proposition that the list is not
+||| empty into positive evidence that it's not empty.
+negativeToPositive : (xs : List a) -> Not (xs = []) -> IsCons xs
+negativeToPositive [] f with (f Refl)
+ negativeToPositive [] f | _ impossible
+negativeToPositive (x :: xs) f = x :: xs
 
-||| Proof that an element is still inside a list if we prepend to it.
-public export
-elemAppRight :  (ys, xs : List a) -> (prf : Elem x xs) -> Elem x (ys ++ xs)
-elemAppRight [] xs prf = prf
-elemAppRight (y :: ys) xs prf = There $ elemAppRight ys xs prf
+||| A positively non-empty list is a cons
+unCons' : (0 xs : List a) -> (0 _ : IsCons xs)
+      -> Exists {type = a} \x => Exists {type = List a} \xs' => xs = (x :: xs')
+unCons' .(x :: xs) (x :: xs) = Evidence x $ Evidence xs Refl
+-- ----------------------------------------------------
 
-||| Proof that membership on append implies membership in left or right sublist.
-public export
-elemAppLorR : (xs, ys : List a)
-           -> (prf : Elem k (xs ++ ys))
-           -> Either (Elem k xs) (Elem k ys)
-elemAppLorR [] [] prf = absurd prf
-elemAppLorR [] _ prf = Right prf
-elemAppLorR (x :: xs) [] prf =
-  Left rewrite sym $ appendNilRightNeutral xs in prf
-elemAppLorR (x :: xs) _ Here = Left Here
-elemAppLorR (x :: xs) ys (There prf) = mapFst There $ elemAppLorR xs ys prf
+||| A non-empty list is a cons
+export
+unCons : (0 xs : List a) -> (0 _ : Not (xs = Nil))
+      -> Exists {type = a} \x => Exists {type = List a} \xs' => xs = (x :: xs')
+unCons xs prf = unCons' xs (negativeToPositive xs prf)
 
+||| A list with an element is non-empty
+export
+elemNonEmpty : Elem x xs -> Not (xs = [])
+elemNonEmpty Here _ impossible
+elemNonEmpty (There pos) _ impossible
 
-||| Proof that x is not in (xs ++ ys) implies proof that x is not in xs.
-public export
-notElemAppLeft : (xs, ys : List a)
-              -> (prf : Not (Elem x (xs ++ ys)))
-              -> Not (Elem x xs)
-notElemAppLeft xs ys prf val = prf $ elemAppLeft xs ys val
-
-||| Proof that x is not in (xs ++ ys) implies proof that x is not in ys.
-public export
-notElemAppRight : (ys, xs : List a)
-               -> (prf : Not (Elem x (xs ++ ys)))
-               -> Not (Elem x ys)
-notElemAppRight ys xs prf val = prf $ elemAppRight xs ys val
+export
+invertMap : (0 f : a -> b) -> Elem y (map f xs) -> Exists {type = a} \x => (Elem x xs, f x = y)
+invertMap  {xs        } {y      } f  pos with (let observation : (xs = [] -> map f xs = []) =
+                                                                 \Refl    => Refl
+                                              in unCons xs
+                                               $ contrapositive observation
+                                               $ elemNonEmpty pos)
+ invertMap {xs = x::xs} {y = f x} f  Here       | Evidence x $ Evidence xs Refl
+   = Evidence x (Here, Refl)
+ invertMap {xs = x::xs} {y      } f (There pos) | Evidence x $ Evidence xs Refl
+   = let Evidence y (pos, pf) = invertMap f pos in
+     Evidence y (There pos, pf)
