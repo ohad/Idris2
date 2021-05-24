@@ -12,6 +12,7 @@ import Data.Nat
 import Data.Vect
 
 import System.File
+import Libraries.Data.PosMap
 
 -- Serialising data as binary. Provides an interface TTC which allows
 -- reading and writing to chunks of memory, "Binary", which can be written
@@ -151,7 +152,7 @@ getTag {b}
 -- Some useful types from the prelude
 
 export
-TTC Int where
+[Wasteful] TTC Int where
   toBuf b val
     = do chunk <- get Bin
          if avail chunk >= 8
@@ -170,6 +171,32 @@ TTC Int where
                  put Bin (incLoc 8 chunk)
                  pure val
               else throw (TTCError (EndOfBuffer ("Int " ++ show (loc chunk, size chunk))))
+
+export
+TTC Int where
+  toBuf b val
+    = if val >= -127 && val < 128
+         then tag (val + 127)
+         else do tag 255
+                 chunk <- get Bin
+                 if avail chunk >= 8
+                    then
+                      do coreLift $ setInt (buf chunk) (loc chunk) val
+                         put Bin (appended 8 chunk)
+                    else do chunk' <- extendBinary 8 chunk
+                            coreLift $ setInt (buf chunk') (loc chunk') val
+                            put Bin (appended 8 chunk')
+
+  fromBuf b
+    = case !getTag of
+           255 => do chunk <- get Bin
+                     if toRead chunk >= 8
+                       then
+                         do val <- coreLift $ getInt (buf chunk) (loc chunk)
+                            put Bin (incLoc 8 chunk)
+                            pure val
+                       else throw (TTCError (EndOfBuffer ("Int " ++ show (loc chunk, size chunk))))
+           t => pure (t - 127)
 
 export
 TTC String where
@@ -377,6 +404,11 @@ export
           = do val <- fromBuf b
                rewrite (plusSuccRightSucc k done)
                readElems (val :: xs) k
+
+export
+(TTC a, Measure a) => TTC (PosMap a) where
+  toBuf b = toBuf b . toList
+  fromBuf b = fromList <$> fromBuf b
 
 %hide Fin.fromInteger
 

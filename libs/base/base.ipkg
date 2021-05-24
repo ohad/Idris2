@@ -1,11 +1,13 @@
 package base
 version = 0.3.0
 
-opts = "--ignore-missing-ipkg"
+opts = "--ignore-missing-ipkg --no-shadowing-warning"
 
 modules = Control.App,
           Control.App.Console,
           Control.App.FileIO,
+
+          Control.Applicative.Const,
 
           Control.Monad.Either,
           Control.Monad.Error.Either,
@@ -28,12 +30,14 @@ modules = Control.App,
           Control.Monad.Writer.Interface,
           Control.WellFounded,
 
+          Data.Bifoldable,
           Data.Bits,
           Data.Bool,
           Data.Bool.Xor,
           Data.Buffer,
           Data.Colist,
           Data.Colist1,
+          Data.Contravariant,
           Data.DPair,
           Data.Either,
           Data.Fin,
@@ -44,6 +48,7 @@ modules = Control.App,
           Data.IOArray.Prims,
           Data.IORef,
           Data.List,
+          Data.SnocList,
           Data.List.Elem,
           Data.List.Views,
           Data.List.Quantifiers,

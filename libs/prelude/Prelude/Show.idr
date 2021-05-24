@@ -41,6 +41,7 @@ Ord Prec where
 ||| Things that have a canonical `String` representation.
 public export
 interface Show ty where
+  constructor MkShow
   ||| Convert a value to its `String` representation.
   ||| @ x the value to convert
   show : (x : ty) -> String
@@ -154,11 +155,6 @@ showLitChar c
            "BS",  "HT",  "LF",  "VT",  "FF",  "CR",  "SO",  "SI",
            "DLE", "DC1", "DC2", "DC3", "DC4", "NAK", "SYN", "ETB",
            "CAN", "EM",  "SUB", "ESC", "FS",  "GS",  "RS",  "US"]
-
-    getAt : Nat -> List String -> Maybe String
-    getAt Z     (x :: xs) = Just x
-    getAt (S k) (x :: xs) = getAt k xs
-    getAt _     []        = Nothing
 
 showLitString : List Char -> String -> String
 showLitString []        = id
