@@ -4,15 +4,20 @@ import Core.Context
 import Core.Context.Log
 import Core.Directory
 import Core.Metadata
+import Core.Env
 
 import Idris.REPL
 import Idris.Syntax
 import Idris.IDEMode.Commands
+import Idris.Resugar
+import Idris.Pretty
+import Idris.Doc.String
 
 import Data.List
 
 import Libraries.Data.PosMap
 
+%hide Prelude.(<=<)
 %default total
 
 ||| Output some data using current dialog index
@@ -40,6 +45,7 @@ lwOutputHighlight :
 lwOutputHighlight (fname, nfc, decor) =
   printOutput $ Lw $ MkLwHighlight {location = cast (fname, nfc), decor}
 
+covering
 outputNameSyntax : {auto c : Ref Ctxt Defs} ->
                    {auto s : Ref Syn SyntaxInfo} ->
                    {auto opts : Ref ROpts REPLOpts} ->
@@ -51,18 +57,27 @@ outputNameSyntax (fname, nfc, decor, nm) = do
                                  ++ "\nAs: " ++ show decor
       let fc = justFC nfc
       let (mns, name) = displayName nm
+      mgdef <- lookupCtxtExact nm (gamma defs)
+      mty <- --traverseOpt (\ x => normaliseHoles defs [] (type x) >>= resugar []) mgdef
+            traverseOpt (resugar (the (Env Term _) [])
+                         <=< normaliseHoles defs []
+                         <=< (pure . type)
+                        )
+              mgdef
+      let typ = maybe "" (show . prettyTerm) mty
+
       outputHighlight $ MkHighlight
          { location = cast (fname, nfc)
          , name
          , isImplicit = False
          , key = ""
          , decor
-         , docOverview = "" --!(getDocsForName fc nm)
-         , typ = "" -- TODO: extract type maybe "" show !(lookupTyExact nm (gamma defs))
+         , docOverview = show !(getDocsForName fc nm justUserDoc)
+         , typ
          , ns = maybe "" show mns
          }
 
-export
+export covering
 outputSyntaxHighlighting : {auto c : Ref Ctxt Defs} ->
                            {auto m : Ref MD Metadata} ->
                            {auto s : Ref Syn SyntaxInfo} ->
